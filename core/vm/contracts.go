@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
+	blsWrapper "github.com/prysmaticlabs/go-bls"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -137,6 +138,7 @@ var PrecompiledContractsPrague = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x11}): &bls12381Pairing{},
 	common.BytesToAddress([]byte{0x12}): &bls12381MapG1{},
 	common.BytesToAddress([]byte{0x13}): &bls12381MapG2{},
+	common.BytesToAddress([]byte{0x14}): &bls12381SignatureVerification{},
 }
 
 var PrecompiledContractsBLS = PrecompiledContractsPrague
@@ -1195,6 +1197,42 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 	// Encode the G2 point to 256 bytes
 	return encodePointG2(&r), nil
+}
+
+// bls12381SignatureVerification implements BLS signature verification precompile.
+type bls12381SignatureVerification struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *bls12381SignatureVerification) RequiredGas(input []byte) uint64 {
+	return params.Bls12381SignVerifyGas
+}
+
+func (c *bls12381SignatureVerification) Run(input []byte) ([]byte, error) {
+	// Input format:
+	// - pubkey (48 bytes) - G1 point
+	// - message (32 bytes) - Hash of the message
+	// - signature (96 bytes) - G2 point
+	if len(input) != 176 {
+		return nil, errBLS12381InvalidInputLength
+	}
+
+	var pubkey *blsWrapper.PublicKey
+	if err := pubkey.Deserialize(input[:48]); err != nil {
+		return nil, err
+	}
+
+	// Extract signature (G2 point)
+	var sig *blsWrapper.Sign
+	if err := sig.Deserialize(input[80:]); err != nil {
+		return nil, err
+	}
+
+	// Verify the signature
+	if !sig.Verify(pubkey, input[48:80]) {
+		return nil, nil
+	}
+
+	return input[:48], nil
 }
 
 // kzgPointEvaluation implements the EIP-4844 point evaluation precompile.
