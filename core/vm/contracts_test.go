@@ -24,7 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudflare/circl/sign/bls"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.
@@ -270,6 +272,30 @@ func TestPrecompileBlake2FMalformedInput(t *testing.T) {
 	for _, test := range blake2FMalformedInputTests {
 		testPrecompiledFailure("09", test, t)
 	}
+}
+
+func TestBLS(t *testing.T) {
+	// Generate a BLS signature to verify
+	message := []byte("Hello, Ethereum!")
+	hashedMessage := crypto.Keccak256(message)
+	ikm := make([]byte, 32)
+	privateKey, err := bls.KeyGen[bls.G1](ikm, nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to generate private key: %v", err)
+	}
+	publicKey := privateKey.PublicKey()
+	signature := bls.Sign(privateKey, hashedMessage)
+
+	// Verify the signature
+	if !bls.Verify(publicKey, hashedMessage, signature) {
+		t.Fatalf("Failed to verify generated BLS signature")
+	}
+
+	pubkeyb, _ := publicKey.MarshalBinary()
+	fmt.Printf("Public Key: %s\n", common.Bytes2Hex(pubkeyb))
+	fmt.Printf("Message: %s\n", common.Bytes2Hex(hashedMessage))
+	fmt.Printf("Signature: %s\n", common.Bytes2Hex(signature))
+
 }
 
 func TestPrecompiledEcrecover(t *testing.T) { testJson("ecRecover", "01", t) }
