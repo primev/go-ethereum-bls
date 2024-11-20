@@ -25,6 +25,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/cloudflare/circl/sign/bls"
 	"github.com/consensys/gnark-crypto/ecc"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
@@ -36,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
-	blsWrapper "github.com/prysmaticlabs/go-bls"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -1216,22 +1216,14 @@ func (c *bls12381SignatureVerification) Run(input []byte) ([]byte, error) {
 		return nil, errBLS12381InvalidInputLength
 	}
 
-	var pubkey *blsWrapper.PublicKey
-	if err := pubkey.Deserialize(input[:48]); err != nil {
+	var pubKey bls.PublicKey[bls.G1]
+	if err := pubKey.UnmarshalBinary(input[:48]); err != nil {
 		return nil, err
 	}
 
-	// Extract signature (G2 point)
-	var sig *blsWrapper.Sign
-	if err := sig.Deserialize(input[80:]); err != nil {
-		return nil, err
-	}
-
-	// Verify the signature
-	if !sig.Verify(pubkey, input[48:80]) {
+	if !bls.Verify(&pubKey, input[48:80], input[80:]) {
 		return nil, nil
 	}
-
 	return input[:48], nil
 }
 
